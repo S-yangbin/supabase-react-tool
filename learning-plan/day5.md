@@ -68,16 +68,26 @@ VITE_SUPABASE_ANON_KEY=your_production_supabase_anon_key
 ```typescript
 // src/App.tsx
 import { lazy, Suspense } from 'react'
+import { Spin } from 'antd'
+import { StoreProvider } from './components/StoreProvider'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Suspense fallback={<div className="p-8 text-center">加载中...</div>}>
-        <Dashboard />
-      </Suspense>
-    </div>
+    <StoreProvider>
+      <div className="min-h-screen bg-gray-50">
+        <Suspense fallback={
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+            <Spin size="large" tip="加载中..." />
+          </div>
+        }>
+          <div className="min-h-screen bg-gray-50">
+            <Dashboard />
+          </div>
+        </Suspense>
+      </StoreProvider>
+    </StoreProvider>
   )
 }
 

@@ -40,10 +40,19 @@ npm run dev
 # 浏览器打开 http://localhost:5173
 ```
 
-### 4. 安装 Supabase 客户端 (10分钟)
+### 4. 安装依赖包 (15分钟)
 ```bash
 # 安装 Supabase JavaScript 客户端
 npm install @supabase/supabase-js
+
+# 安装 Ant Design 组件库
+npm install antd
+
+# 安装 MobX 状态管理
+npm install mobx mobx-react-lite
+
+# 安装 TypeScript 类型定义
+npm install -D @types/react @types/node
 ```
 
 ### 5. 创建 Supabase 配置文件 (20分钟)
@@ -61,14 +70,48 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 ```
 
-### 6. 配置环境变量 (10分钟)
+### 6. 配置 Ant Design 和全局样式 (15分钟)
+修改 `src/main.tsx`：
+```typescript
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.tsx'
+import './index.css'
+import 'antd/dist/reset.css' // Ant Design 样式重置
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+```
+
+创建 `src/stores/index.ts`：
+```typescript
+import { createContext, useContext } from 'react'
+import { makeAutoObservable } from 'mobx'
+
+class RootStore {
+  constructor() {
+    makeAutoObservable(this)
+  }
+}
+
+export const rootStore = new RootStore()
+
+export const StoreContext = createContext<RootStore>(rootStore)
+
+export const useStore = () => useContext(StoreContext)
+```
+
+### 7. 配置环境变量 (10分钟)
 创建 `.env.example` 文件：
 ```
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### 7. 代码提交 (5分钟)
+### 8. 代码提交 (5分钟)
 ```bash
 git init
 git add .

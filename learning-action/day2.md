@@ -1,0 +1,16 @@
+1. 在supabase网站创建了实例，并将密钥写到了.env文件中
+
+2. 创建了todos表，并开启了supabase的行级权限。行级权限控制支持根据policy控制表中每一行数据的访问权限
+
+3. 创建了todos表行级权限的policy，增删改查都只能是登录验证账号的 uid 和 表格中 user_id 字段值一致才行
+
+4. policy的using实现类似在需要执行的sql语句中追加上了where条件。check实现类似在插入后验证了插入的结果是否和验证的条件一致
+
+5. 新增了 src/components/SupabaseAuth.tsx 文件。该文件中是SupabaseAuth组件，如果未登录则展示登录注册界面；如果已登录则展示登录用户信息。其中主要用到 supabase.auth.getSession() 方法来获取当前登录的用户session，session中包含的用户id，用户名等信息；用supabase.auth.onAuthStateChange来监听用户登录和登出的状态，当登入或者登出时触发回调函数，并在回调函数中设置最新的用户信息；用 upabase.auth.signInWithPassword 来完成用户的登录操作；使用 supabase.auth.signUp 来完成用户的注册操作
+
+supabase可以配置支持的登录方式，使用邮件方式时，注册后邮箱会收到激活邮件，点击后才能激活使用。
+当登录后supabase会生成jwt token保存到客户端的localstorage中，后续的请求会自动在Authorization头中带上这个token给服务端验证
+
+supabase.auth.onAuthStateChange是监听的浏览器localstorage的状态变化，当用户登录或者登出时就算当前打开了多个页面，所有页面也会都监听到状态的变化从而触发回调
+
+6. 启动vite验证效果正常

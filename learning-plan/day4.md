@@ -10,8 +10,14 @@
 ### 1. 创建数据可视化组件 (45分钟)
 创建 `src/components/DataVisualization.tsx`：
 ```typescript
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react'
+import { Card, Row, Col, Statistic, Progress, Typography, Spin, theme } from 'antd'
+import { CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined, PercentageOutlined } from '@ant-design/icons'
 import { supabase } from '../lib/supabase'
+import { useStore } from '../stores'
+import { makeAutoObservable } from 'mobx'
+
+const { Title } = Typography
 
 interface TodoStats {
   total: number
@@ -20,16 +26,18 @@ interface TodoStats {
   completionRate: number
 }
 
-const DataVisualization: React.FC = () => {
-  const [stats, setStats] = useState<TodoStats | null>(null)
-  const [loading, setLoading] = useState(true)
+// 创建 StatsStore
+class StatsStore {
+  stats: TodoStats | null = null
+  loading: boolean = true
 
-  useEffect(() => {
-    fetchStats()
-  }, [])
+  constructor() {
+    makeAutoObservable(this)
+  }
 
-  const fetchStats = async () => {
+  fetchStats = async () => {
     try {
+      this.loading = true
       // 获取所有待办事项统计
       const { data: allTodos, error: allError } = await supabase
         .from('todos')
@@ -51,63 +59,109 @@ const DataVisualization: React.FC = () => {
         const pending = total - completed
         const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
 
-        setStats({
+        this.stats = {
           total,
           completed,
           pending,
           completionRate
-        })
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching stats:', error)
     } finally {
-      setLoading(false)
+      this.loading = false
     }
   }
+}
 
-  if (loading || !stats) {
+// 更新 rootStore
+rootStore.statsStore = new StatsStore()
+
+const DataVisualization: React.FC = () => {
+  const { statsStore } = useStore()
+
+  useEffect(() => {
+    statsStore.fetchStats()
+  }, [])
+
+  if (statsStore.loading || !statsStore.stats) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">数据统计</h2>
-        <p>加载中...</p>
-      </div>
+      <Card style={{ marginBottom: 24 }}>
+        <Spin tip="加载统计信息...">
+          <div style={{ minHeight: 100 }} />
+        </Spin>
+      </Card>
     )
   }
 
+  const { stats } = statsStore
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4">待办事项统计</h2>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-          <div className="text-sm text-gray-600">总计</div>
-        </div>
-        <div className="bg-green-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
-          <div className="text-sm text-gray-600">已完成</div>
-        </div>
-        <div className="bg-yellow-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-          <div className="text-sm text-gray-600">待完成</div>
-        </div>
-        <div className="bg-purple-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-purple-600">{stats.completionRate}%</div>
-          <div className="text-sm text-gray-600">完成率</div>
-        </div>
-      </div>
+    <Card style={{ marginBottom: 24 }}>
+      <Title level={3}>待办事项统计</Title>
       
-      <div className="mt-6">
-        <div className="w-full bg-gray-200 rounded-full h-4">
-          <div 
-            className="bg-green-500 h-4 rounded-full transition-all duration-300"
-            style={{ width: `${stats.completionRate}%` }}
-          ></div>
-        </div>
-        <div className="text-sm text-gray-600 mt-2">
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="总计"
+              value={stats.total}
+              prefix={<FileTextOutlined />}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="已完成"
+              value={stats.completed}
+              prefix={<CheckCircleOutlined />}
+              valueStyle={{ color: '#52c41a' }}
+            />
+          </Card>
+        </Col>
+        
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="待完成"
+              value={stats.pending}
+              prefix={<ClockCircleOutlined />}
+              valueStyle={{ color: '#faad14' }}
+            />
+          </Card>
+        </Col>
+        
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="完成率"
+              value={stats.completionRate}
+              suffix="%"
+              prefix={<PercentageOutlined />}
+              valueStyle={{ color: '#722ed1' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <div style={{ marginTop: 24 }}>
+        <Progress
+          percent={stats.completionRate}
+          size="large"
+          status="active"
+          strokeColor={{
+            '0%': '#108ee9',
+            '100%': '#87d068',
+          }}
+        />
+        <div style={{ marginTop: 8, textAlign: 'center' }}>
           任务完成进度
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -115,19 +169,22 @@ export default DataVisualization
 ```
 
 ### 2. 集成到仪表板页面 (15分钟)
-修改 `src/pages/Dashboard.tsx`，在认证组件后添加数据可视化：
+修改 `src/pages/Dashboard.tsx`，更新组件结构以包含数据可视化：
 ```typescript
 // 在导入部分添加
 import DataVisualization from '../components/DataVisualization'
 
-// 在 JSX 中，认证组件后添加
-<div className="mb-8">
-  <SupabaseAuth />
-</div>
+// 在 JSX 中，Card 内部结构更新为：
+<Col xs={24} md={8}>
+  <Card>
+    <SupabaseAuth />
+  </Card>
+  <div style={{ marginTop: 16 }}>
+    <DataVisualization />
+  </div>
+</Col>
 
-<DataVisualization />
-
-// 完整的组件结构更新
+// 完整的组件结构更新已在 Day 3 中完成
 ```
 
 ### 3. 实现实时数据更新 (30分钟)

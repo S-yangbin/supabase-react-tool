@@ -80,28 +80,54 @@ const Dashboard: React.FC = () => {
 ### 2. 文件存储功能实现 (60分钟)
 创建 `src/components/FileUpload.tsx`：
 ```typescript
-import React, { useState } from 'react'
+import React, { useEffect } from 'react'
+import { Card, Upload, Button, Table, message, Progress, Space, Typography, Modal } from 'antd'
+import { UploadOutlined, DownloadOutlined, DeleteOutlined, FileOutlined } from '@ant-design/icons'
 import { supabase } from '../lib/supabase'
+import { useStore } from '../stores'
+import { makeAutoObservable } from 'mobx'
 
-const FileUpload: React.FC = () => {
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [files, setFiles] = useState<any[]>([])
+const { Title, Text } = Typography
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
+interface FileItem {
+  id: string
+  name: string
+  path: string
+  public_url: string
+  size: number
+  type: string
+  created_at: string
+}
+
+// 创建 FileStore
+class FileStore {
+  files: FileItem[] = []
+  uploading: boolean = false
+  progress: number = 0
+
+  constructor() {
+    makeAutoObservable(this)
+  }
+
+  fetchFiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('files')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      this.files = data || []
+    } catch (error: any) {
+      message.error('获取文件列表失败: ' + error.message)
     }
   }
 
-  const uploadFile = async () => {
-    if (!file) return
-
-    setUploading(true)
-    setProgress(0)
-
+  uploadFile = async (file: File) => {
     try {
+      this.uploading = true
+      this.progress = 0
+
       // 生成唯一的文件名
       const fileName = `${Date.now()}-${file.name}`
       
@@ -110,7 +136,7 @@ const FileUpload: React.FC = () => {
         .upload(fileName, file, {
           upsert: true,
           onProgress: (progressEvent) => {
-            setProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total))
+            this.progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
           }
         })
 
@@ -130,108 +156,167 @@ const FileUpload: React.FC = () => {
         type: file.type
       })
 
-      setFile(null)
-      fetchFiles() // 刷新文件列表
-    } catch (error) {
-      console.error('Error uploading file:', error)
+      await this.fetchFiles()
+      message.success('文件上传成功')
+    } catch (error: any) {
+      message.error('文件上传失败: ' + error.message)
     } finally {
-      setUploading(false)
-      setProgress(0)
+      this.uploading = false
+      this.progress = 0
     }
   }
 
-  const fetchFiles = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('files')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setFiles(data || [])
-    } catch (error) {
-      console.error('Error fetching files:', error)
-    }
+  deleteFile = async (path: string, id: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除这个文件吗？此操作不可恢复。',
+      onOk: async () => {
+        try {
+          // 从存储中删除文件
+          await supabase.storage.from('uploads').remove([path])
+          
+          // 从数据库中删除记录
+          await supabase.from('files').delete().eq('id', id)
+          
+          await this.fetchFiles()
+          message.success('文件删除成功')
+        } catch (error: any) {
+          message.error('删除文件失败: ' + error.message)
+        }
+      },
+    })
   }
 
-  const deleteFile = async (path: string, id: string) => {
-    try {
-      // 从存储中删除文件
-      await supabase.storage.from('uploads').remove([path])
-      
-      // 从数据库中删除记录
-      await supabase.from('files').delete().eq('id', id)
-      
-      fetchFiles()
-    } catch (error) {
-      console.error('Error deleting file:', error)
-    }
+  downloadFile = (url: string, filename: string) => {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
+}
+
+// 更新 rootStore
+rootStore.fileStore = new FileStore()
+
+const FileUpload: React.FC = () => {
+  const { fileStore } = useStore()
 
   useEffect(() => {
-    fetchFiles()
+    fileStore.fetchFiles()
   }, [])
 
+  const handleFileUpload = async (file: File) => {
+    await fileStore.uploadFile(file)
+    return false // 阻止默认上传行为
+  }
+
+  const columns = [
+    {
+      title: '文件名',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name: string, record: FileItem) => (
+        <Space>
+          <FileOutlined />
+          <Text strong>{name}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: '大小',
+      dataIndex: 'size',
+      key: 'size',
+      render: (size: number) => (
+        <Text type="secondary">{(size / 1024 / 1024).toFixed(2)} MB</Text>
+      ),
+    },
+    {
+      title: '类型',
+      dataIndex: 'type',
+      key: 'type',
+      render: (type: string) => (
+        <Text type="secondary">{type}</Text>
+      ),
+    },
+    {
+      title: '上传时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => (
+        <Text type="secondary">{new Date(date).toLocaleString('zh-CN')}</Text>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: any, record: FileItem) => (
+        <Space>
+          <Button
+            type="link"
+            icon={<DownloadOutlined />}
+            onClick={() => fileStore.downloadFile(record.public_url, record.name)}
+          >
+            下载
+          </Button>
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => fileStore.deleteFile(record.path, record.id)}
+          >
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ]
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4">文件上传</h2>
+    <Card style={{ marginBottom: 24 }}>
+      <Title level={3}>文件上传</Title>
       
-      <div className="flex items-center space-x-4 mb-4">
-        <input
-          type="file"
-          onChange={handleFileChange}
-          className="flex-1"
-        />
-        <button
-          onClick={uploadFile}
-          disabled={!file || uploading}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
+      <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Upload
+          beforeUpload={handleFileUpload}
+          showUploadList={false}
+          accept="*/*"
         >
-          {uploading ? '上传中...' : '上传'}
-        </button>
-      </div>
+          <Button
+            type="primary"
+            icon={<UploadOutlined />}
+            loading={fileStore.uploading}
+            disabled={fileStore.uploading}
+          >
+            {fileStore.uploading ? `上传中... ${fileStore.progress}%` : '选择文件上传'}
+          </Button>
+        </Upload>
 
-      {uploading && (
-        <div className="mb-4">
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-          <div className="text-sm text-gray-600 mt-1">{progress}%</div>
-        </div>
-      )}
+        {fileStore.uploading && (
+          <Progress
+            percent={fileStore.progress}
+            status="active"
+            showInfo
+          />
+        )}
 
-      <div className="space-y-2">
-        {files.map(file => (
-          <div key={file.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
-            <div>
-              <div className="font-medium">{file.name}</div>
-              <div className="text-sm text-gray-500">
-                {new Date(file.created_at).toLocaleDateString()}
-              </div>
-            </div>
-            <div className="flex space-x-2">
-              <a
-                href={file.public_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-500 hover:text-blue-700"
-              >
-                下载
-              </a>
-              <button
-                onClick={() => deleteFile(file.path, file.id)}
-                className="text-red-500 hover:text-red-700"
-              >
-                删除
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+        <Table
+          columns={columns}
+          dataSource={fileStore.files}
+          rowKey="id"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total) => `共 ${total} 条记录`,
+          }}
+          locale={{
+            emptyText: '暂无文件',
+          }}
+        />
+      </Space>
+    </Card>
   )
 }
 

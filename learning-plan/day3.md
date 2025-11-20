@@ -10,9 +10,16 @@
 ### 1. 创建待办事项页面 (60分钟)
 创建 `src/pages/Dashboard.tsx`：
 ```typescript
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react'
+import { Layout, Typography, Input, Button, List, Checkbox, Card, Row, Col, message } from 'antd'
+import { PlusOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/icons'
 import { supabase } from '../lib/supabase'
 import SupabaseAuth from '../components/SupabaseAuth'
+import { useStore } from '../stores'
+
+const { Header, Content } = Layout
+const { Title, Text } = Typography
+const { Search } = Input
 
 interface Todo {
   id: string
@@ -21,52 +28,51 @@ interface Todo {
   created_at: string
 }
 
-const Dashboard: React.FC = () => {
-  const [todos, setTodos] = useState<Todo[]>([])
-  const [newTodo, setNewTodo] = useState('')
-  const [loading, setLoading] = useState(true)
+// 创建 TodoStore
+class TodoStore {
+  todos: Todo[] = []
+  loading: boolean = true
 
-  useEffect(() => {
-    fetchTodos()
-  }, [])
+  constructor() {
+    makeAutoObservable(this)
+  }
 
-  const fetchTodos = async () => {
+  fetchTodos = async () => {
     try {
+      this.loading = true
       const { data, error } = await supabase
         .from('todos')
         .select('*')
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setTodos(data || [])
-    } catch (error) {
-      console.error('Error fetching todos:', error)
+      this.todos = data || []
+    } catch (error: any) {
+      message.error('获取待办事项失败: ' + error.message)
     } finally {
-      setLoading(false)
+      this.loading = false
     }
   }
 
-  const addTodo = async () => {
-    if (!newTodo.trim()) return
-
+  addTodo = async (title: string) => {
     try {
       const { data, error } = await supabase
         .from('todos')
-        .insert([{ title: newTodo, completed: false }])
+        .insert([{ title, completed: false }])
         .select()
 
       if (error) throw error
 
       if (data) {
-        setTodos([data[0], ...todos])
-        setNewTodo('')
+        this.todos = [data[0], ...this.todos]
+        message.success('添加成功')
       }
-    } catch (error) {
-      console.error('Error adding todo:', error)
+    } catch (error: any) {
+      message.error('添加待办事项失败: ' + error.message)
     }
   }
 
-  const toggleTodo = async (id: string, completed: boolean) => {
+  toggleTodo = async (id: string, completed: boolean) => {
     try {
       const { error } = await supabase
         .from('todos')
@@ -75,15 +81,16 @@ const Dashboard: React.FC = () => {
 
       if (error) throw error
 
-      setTodos(todos.map(todo =>
+      this.todos = this.todos.map(todo =>
         todo.id === id ? { ...todo, completed: !completed } : todo
-      ))
-    } catch (error) {
-      console.error('Error updating todo:', error)
+      )
+      message.success(completed ? '标记为待完成' : '标记为已完成')
+    } catch (error: any) {
+      message.error('更新待办事项失败: ' + error.message)
     }
   }
 
-  const deleteTodo = async (id: string) => {
+  deleteTodo = async (id: string) => {
     try {
       const { error } = await supabase
         .from('todos')
@@ -92,89 +99,174 @@ const Dashboard: React.FC = () => {
 
       if (error) throw error
 
-      setTodos(todos.filter(todo => todo.id !== id))
-    } catch (error) {
-      console.error('Error deleting todo:', error)
+      this.todos = this.todos.filter(todo => todo.id !== id)
+      message.success('删除成功')
+    } catch (error: any) {
+      message.error('删除待办事项失败: ' + error.message)
+    }
+  }
+}
+
+// 添加到 rootStore
+rootStore.todoStore = new TodoStore()
+
+const Dashboard: React.FC = () => {
+  const { todoStore } = useStore()
+  const [newTodo, setNewTodo] = React.useState('')
+
+  useEffect(() => {
+    todoStore.fetchTodos()
+  }, [])
+
+  const handleAddTodo = () => {
+    if (!newTodo.trim()) return
+    todoStore.addTodo(newTodo)
+    setNewTodo('')
+  }
+
+  const handleEnter = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddTodo()
     }
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Supabase 工具仪表板</h1>
+    <Layout style={{ minHeight: '100vh' }}>
+      <Header style={{ background: '#fff', padding: '0 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        <Title level={2} style={{ lineHeight: '64px', margin: 0, color: '#1890ff' }}>
+          Supabase 工具仪表板
+        </Title>
+      </Header>
       
-      <div className="mb-8">
-        <SupabaseAuth />
-      </div>
+      <Content style={{ padding: '24px' }}>
+        <Row gutter={[24, 24]}>
+          <Col xs={24} md={8}>
+            <Card>
+              <SupabaseAuth />
+            </Card>
+          </Col>
+          
+          <Col xs={24} md={16}>
+            <Card>
+              <Title level={3}>待办事项</Title>
+              
+              <div style={{ marginBottom: 16 }}>
+                <Search
+                  placeholder="添加新的待办事项..."
+                  enterButton={<Button type="primary" icon={<PlusOutlined />}>添加</Button>}
+                  size="large"
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                  onSearch={handleAddTodo}
+                  onKeyDown={handleEnter}
+                />
+              </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4">待办事项</h2>
-        
-        <div className="flex mb-4">
-          <input
-            type="text"
-            value={newTodo}
-            onChange={(e) => setNewTodo(e.target.value)}
-            placeholder="添加新的待办事项..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md"
-            onKeyPress={(e) => e.key === 'Enter' && addTodo()}
-          />
-          <button
-            onClick={addTodo}
-            className="bg-blue-500 text-white px-4 py-2 rounded-r-md hover:bg-blue-600"
-          >
-            添加
-          </button>
-        </div>
-
-        {loading ? (
-          <p>加载中...</p>
-        ) : (
-          <ul className="space-y-2">
-            {todos.map(todo => (
-              <li key={todo.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={todo.completed}
-                    onChange={() => toggleTodo(todo.id, todo.completed)}
-                    className="mr-3"
-                  />
-                  <span className={todo.completed ? 'line-through text-gray-500' : ''}>
-                    {todo.title}
-                  </span>
-                </div>
-                <button
-                  onClick={() => deleteTodo(todo.id)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  删除
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {todos.length === 0 && !loading && (
-          <p className="text-gray-500 text-center py-4">暂无待办事项</p>
-        )}
-      </div>
-    </div>
+              <List
+                loading={todoStore.loading}
+                dataSource={todoStore.todos}
+                renderItem={(todo) => (
+                  <List.Item
+                    actions={[
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => todoStore.deleteTodo(todo.id)}
+                      >
+                        删除
+                      </Button>
+                    ]}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <Checkbox
+                          checked={todo.completed}
+                          onChange={() => todoStore.toggleTodo(todo.id, todo.completed)}
+                          icon={<CheckOutlined />}
+                        />
+                      }
+                      title={
+                        <Text delete={todo.completed} style={{ textDecoration: todo.completed ? 'line-through' : 'none' }}>
+                          {todo.title}
+                        </Text>
+                      }
+                      description={
+                        <Text type="secondary">
+                          {new Date(todo.created_at).toLocaleString('zh-CN')}
+                        </Text>
+                      }
+                    />
+                  </List.Item>
+                )}
+                locale={{
+                  emptyText: '暂无待办事项'
+                }}
+              />
+            </Card>
+          </Col>
+        </Row>
+      </Content>
+    </Layout>
   )
 }
 
 export default Dashboard
 ```
 
-### 2. 更新主应用组件 (15分钟)
+### 2. 更新 stores/index.ts (15分钟)
+修改 `src/stores/index.ts`：
+```typescript
+import { createContext, useContext } from 'react'
+import { makeAutoObservable } from 'mobx'
+
+class RootStore {
+  todoStore: any = null // 暂时用 any，后续会定义具体类型
+
+  constructor() {
+    makeAutoObservable(this)
+  }
+}
+
+export const rootStore = new RootStore()
+
+export const StoreContext = createContext<RootStore>(rootStore)
+
+export const useStore = () => useContext(StoreContext)
+```
+
+### 2.1 创建 Store Provider 组件 (10分钟)
+创建 `src/components/StoreProvider.tsx`：
+```typescript
+import React, { ReactNode } from 'react'
+import { StoreContext, rootStore } from '../stores'
+
+interface StoreProviderProps {
+  children: ReactNode
+}
+
+export const StoreProvider: React.FC<StoreProviderProps> = ({ children }) => {
+  return (
+    <StoreContext.Provider value={rootStore}>
+      {children}
+    </StoreContext.Provider>
+  )
+}
+```
+
+### 3. 更新主应用组件 (15分钟)
 修改 `src/App.tsx`：
 ```typescript
 import Dashboard from './pages/Dashboard'
+import { StoreProvider } from './components/StoreProvider'
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Dashboard />
-    </div>
+    <StoreProvider>
+      <div className="min-h-screen bg-gray-50">
+        <Dashboard />
+      </div>
+    </StoreProvider>
   )
 }
 

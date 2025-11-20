@@ -103,6 +103,10 @@ npm install @sentry/react @sentry/tracing
 ```typescript
 import * as Sentry from '@sentry/react';
 import { BrowserTracing } from '@sentry/tracing';
+import { Modal, Button, Typography, Space } from 'antd';
+import React from 'react';
+
+const { Title, Text, Paragraph } = Typography;
 
 // Sentry 配置
 Sentry.init({
@@ -123,21 +127,47 @@ Sentry.init({
   }
 });
 
+// 自定义错误边界组件
+export const ErrorBoundaryFallback = ({ error, componentStack, resetError }: any) => {
+  return (
+    <Modal
+      title="出现错误"
+      open={true}
+      footer={[
+        <Button key="reload" type="primary" onClick={resetError}>
+          重新加载
+        </Button>
+      ]}
+      onCancel={resetError}
+      destroyOnClose
+    >
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <Title level={4} style={{ color: '#ff4d4f' }}>错误详情</Title>
+        <Paragraph strong>错误信息:</Paragraph>
+        <Text code style={{ color: '#ff4d4f' }}>
+          {error.message}
+        </Text>
+        <Paragraph strong>组件栈:</Paragraph>
+        <div style={{ 
+          backgroundColor: '#f5f5f5', 
+          padding: '12px', 
+          borderRadius: '4px',
+          maxHeight: '200px',
+          overflow: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '12px'
+        }}>
+          {componentStack}
+        </div>
+      </Space>
+    </Modal>
+  );
+};
+
 // 自定义错误边界
 export const withErrorBoundary = (Component: React.ComponentType) => {
   return Sentry.withErrorBoundary(Component, {
-    fallback: ({ error, componentStack, resetError }) => (
-      <div className="error-boundary">
-        <h2>出现错误</h2>
-        <details className="error-details">
-          <summary>错误详情</summary>
-          <p><strong>错误信息:</strong> {error.message}</p>
-          <p><strong>组件栈:</strong></p>
-          <pre>{componentStack}</pre>
-        </details>
-        <button onClick={resetError}>重新加载</button>
-      </div>
-    ),
+    fallback: ErrorBoundaryFallback,
   });
 };
 
