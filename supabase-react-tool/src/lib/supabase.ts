@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
+import { validateEnvironment } from './env-validator'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+// 验证并获取环境变量
+const env = validateEnvironment()
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase environment variables are not set')
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(
+  env.VITE_SUPABASE_URL,
+  env.VITE_SUPABASE_ANON_KEY
+)
 
 console.log('Supabase client created:', supabase)
