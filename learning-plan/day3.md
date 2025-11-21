@@ -7,29 +7,21 @@
 
 ## 具体步骤
 
-### 1. 创建待办事项页面 (60分钟)
-创建 `src/pages/Dashboard.tsx`：
+### 1. 创建 TodoStore (20分钟)
+创建 `src/stores/todoStore.ts`：
 ```typescript
-import React, { useEffect } from 'react'
-import { Layout, Typography, Input, Button, List, Checkbox, Card, Row, Col, message } from 'antd'
-import { PlusOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/icons'
+import { makeAutoObservable } from 'mobx'
 import { supabase } from '../lib/supabase'
-import SupabaseAuth from '../components/SupabaseAuth'
-import { useStore } from '../stores'
+import { message } from 'antd'
 
-const { Header, Content } = Layout
-const { Title, Text } = Typography
-const { Search } = Input
-
-interface Todo {
+export interface Todo {
   id: string
   title: string
   completed: boolean
   created_at: string
 }
 
-// 创建 TodoStore
-class TodoStore {
+export class TodoStore {
   todos: Todo[] = []
   loading: boolean = true
 
@@ -106,9 +98,184 @@ class TodoStore {
     }
   }
 }
+```
 
-// 添加到 rootStore
-rootStore.todoStore = new TodoStore()
+### 1.1 创建 AuthStore (15分钟)
+创建 `src/stores/authStore.ts`：
+```typescript
+import { makeAutoObservable } from 'mobx'
+import { supabase } from '../lib/supabase'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { message } from 'antd'
+
+export interface AuthMessage {
+  type: 'success' | 'error'
+  content: string
+}
+
+export class AuthStore {
+  user: SupabaseUser | null = null
+  loading: boolean = false
+  message: AuthMessage | null = null
+
+  constructor() {
+    makeAutoObservable(this)
+    this.initializeAuthListener()
+  }
+
+  private initializeAuthListener = () => {
+    // 监听认证状态变化
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        this.setUser(session?.user || null)
+        if (session) {
+          this.setMessage({ type: 'success', content: '登录成功！' })
+        }
+      }
+    )
+
+    // 检查当前会话
+    this.checkCurrentSession()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }
+
+  private checkCurrentSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        this.setUser(session.user)
+      }
+    } catch (error) {
+      console.error('检查会话失败:', error)
+    }
+  }
+
+  setUser = (user: SupabaseUser | null) => {
+    this.user = user
+  }
+
+  setMessage = (message: AuthMessage | null) => {
+    this.message = message
+  }
+
+  setLoading = (loading: boolean) => {
+    this.loading = loading
+  }
+
+  handleLogin = async (email: string, password: string) => {
+    try {
+      this.setLoading(true)
+      this.setMessage(null)
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        this.setMessage({ type: 'error', content: error.message })
+        return false
+      }
+      return true
+    } catch (error: any) {
+      this.setMessage({ type: 'error', content: error.message })
+      return false
+    } finally {
+      this.setLoading(false)
+    }
+  }
+
+  handleSignup = async (email: string, password: string) => {
+    try {
+      this.setLoading(true)
+      this.setMessage(null)
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+
+      if (error) {
+        this.setMessage({ type: 'error', content: error.message })
+        return false
+      } else {
+        this.setMessage({ type: 'success', content: 'Check your email for the confirmation link!' })
+        return true
+      }
+    } catch (error: any) {
+      this.setMessage({ type: 'error', content: error.message })
+      return false
+    } finally {
+      this.setLoading(false)
+    }
+  }
+
+  handleLogout = async () => {
+    try {
+      this.setLoading(true)
+      this.setMessage(null)
+
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        this.setMessage({ type: 'error', content: error.message })
+        return false
+      } else {
+        this.setMessage({ type: 'success', content: 'Logged out successfully!' })
+        return true
+      }
+    } catch (error: any) {
+      this.setMessage({ type: 'error', content: error.message })
+      return false
+    } finally {
+      this.setLoading(false)
+    }
+  }
+}
+```
+
+### 2. 更新 stores/index.ts (10分钟)
+修改 `src/stores/index.ts`：
+```typescript
+import { createContext, useContext } from 'react'
+import { makeAutoObservable } from 'mobx'
+import { TodoStore } from './todoStore'
+import { AuthStore } from './authStore'
+
+class RootStore {
+  todoStore: TodoStore
+  authStore: AuthStore
+
+  constructor() {
+    this.todoStore = new TodoStore()
+    this.authStore = new AuthStore()
+    makeAutoObservable(this)
+  }
+}
+
+export const rootStore = new RootStore()
+
+export const StoreContext = createContext<RootStore>(rootStore)
+
+export const useStore = () => useContext(StoreContext)
+```
+
+### 3. 创建待办事项页面 (40分钟)
+创建 `src/pages/Dashboard.tsx`：
+```typescript
+import React, { useEffect } from 'react'
+import { observer } from 'mobx-react-lite'
+import { Layout, Typography, Input, Button, List, Checkbox, Card, Row, Col } from 'antd'
+import { PlusOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/icons'
+import SupabaseAuth from '../components/SupabaseAuth'
+import { useStore } from '../stores'
+import type { Todo } from '../stores/todoStore'
+
+const { Header, Content } = Layout
+const { Title, Text } = Typography
+const { Search } = Input
 
 const Dashboard: React.FC = () => {
   const { todoStore } = useStore()
@@ -124,7 +291,7 @@ const Dashboard: React.FC = () => {
     setNewTodo('')
   }
 
-  const handleEnter = (e: React.KeyboardEvent) => {
+  const handleEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleAddTodo()
     }
@@ -156,7 +323,7 @@ const Dashboard: React.FC = () => {
                   enterButton={<Button type="primary" icon={<PlusOutlined />}>添加</Button>}
                   size="large"
                   value={newTodo}
-                  onChange={(e) => setNewTodo(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTodo(e.target.value)}
                   onSearch={handleAddTodo}
                   onKeyDown={handleEnter}
                 />
@@ -165,7 +332,7 @@ const Dashboard: React.FC = () => {
               <List
                 loading={todoStore.loading}
                 dataSource={todoStore.todos}
-                renderItem={(todo) => (
+                renderItem={(todo: Todo) => (
                   <List.Item
                     actions={[
                       <Button
@@ -211,28 +378,7 @@ const Dashboard: React.FC = () => {
   )
 }
 
-export default Dashboard
-```
-
-### 2. 更新 stores/index.ts (15分钟)
-修改 `src/stores/index.ts`：
-```typescript
-import { createContext, useContext } from 'react'
-import { makeAutoObservable } from 'mobx'
-
-class RootStore {
-  todoStore: any = null // 暂时用 any，后续会定义具体类型
-
-  constructor() {
-    makeAutoObservable(this)
-  }
-}
-
-export const rootStore = new RootStore()
-
-export const StoreContext = createContext<RootStore>(rootStore)
-
-export const useStore = () => useContext(StoreContext)
+export default observer(Dashboard)
 ```
 
 ### 2.1 创建 Store Provider 组件 (10分钟)
@@ -257,6 +403,7 @@ export const StoreProvider: React.FC<StoreProviderProps> = ({ children }) => {
 ### 3. 更新主应用组件 (15分钟)
 修改 `src/App.tsx`：
 ```typescript
+import React from 'react'
 import Dashboard from './pages/Dashboard'
 import { StoreProvider } from './components/StoreProvider'
 
@@ -270,7 +417,7 @@ function App() {
   )
 }
 
-export default App
+export default observer(App)
 ```
 
 ### 3. 实现 CRUD 操作 (45分钟)

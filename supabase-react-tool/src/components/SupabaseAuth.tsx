@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react'
+import { observer } from 'mobx-react-lite'
 import { Form, Input, Button, Card, Alert, Typography, Space } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
-import { supabase } from '../lib/supabase'
-import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { useStore } from '../stores'
 
 const { Title, Text } = Typography
 
@@ -12,99 +12,48 @@ interface AuthFormValues {
 }
 
 const SupabaseAuth: React.FC = () => {
-  const [user, setUser] = React.useState<SupabaseUser | null>(null)
-  const [loading, setLoading] = React.useState(false)
-  const [message, setMessage] = React.useState<{ type: 'success' | 'error'; content: string } | null>(null)
+  const { authStore } = useStore()
   const [form] = Form.useForm()
 
-  useEffect(() => {
-    // 检查当前会话
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        setUser(session.user)
-      }
-    }
-
-    checkSession()
-
-    // 监听认证状态变化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          setUser(session.user)
-          setMessage({ type: 'success', content: '登录成功！' })
-        } else {
-          setUser(null)
-        }
-      }
-    )
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [])
-
   const handleLogin = async (values: AuthFormValues) => {
-    setLoading(true)
-    setMessage(null)
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    })
-
-    if (error) {
-      setMessage({ type: 'error', content: error.message })
+    const success = await authStore.handleLogin(values.email, values.password)
+    if (success) {
+      form.resetFields()
     }
-    setLoading(false)
   }
 
   const handleSignup = async (values: AuthFormValues) => {
-    setLoading(true)
-    setMessage(null)
-
-    const { error } = await supabase.auth.signUp({
-      email: values.email,
-      password: values.password,
-    })
-
-    if (error) {
-      setMessage({ type: 'error', content: error.message })
-    } else {
-      setMessage({ type: 'success', content: 'Check your email for the confirmation link!' })
+    const success = await authStore.handleSignup(values.email, values.password)
+    if (success) {
+      form.resetFields()
     }
-    setLoading(false)
   }
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      setMessage({ type: 'error', content: error.message })
-    } else {
-      setMessage({ type: 'success', content: 'Logged out successfully!' })
+    const success = await authStore.handleLogout()
+    if (success) {
       form.resetFields()
     }
   }
 
   return (
     <Card style={{ maxWidth: 400, margin: '0 auto' }}>
-      {user ? (
+      {authStore.user ? (
         <div>
           <Title level={4}>当前用户</Title>
-          <Text>{user.email}</Text>
+          <Text>{authStore.user.email}</Text>
           <div style={{ marginTop: 16 }}>
-            <Button onClick={handleLogout} danger>
+            <Button onClick={handleLogout} danger loading={authStore.loading}>
               退出登录
             </Button>
           </div>
         </div>
       ) : (
         <div>
-          {message && (
+          {authStore.message && (
             <Alert
-              message={message.content}
-              type={message.type}
+              message={authStore.message.content}
+              type={authStore.message.type}
               showIcon
               style={{ marginBottom: 16 }}
             />
@@ -136,7 +85,7 @@ const SupabaseAuth: React.FC = () => {
                 <Button 
                   type="primary" 
                   htmlType="submit" 
-                  loading={loading}
+                  loading={authStore.loading}
                   block
                 >
                   登录
@@ -167,8 +116,8 @@ const SupabaseAuth: React.FC = () => {
               <Form.Item>
                 <Button 
                   htmlType="submit" 
-                  loading={loading}
-                  disabled={loading}
+                  loading={authStore.loading}
+                  disabled={authStore.loading}
                   block
                 >
                   注册
@@ -182,4 +131,4 @@ const SupabaseAuth: React.FC = () => {
   )
 }
 
-export default SupabaseAuth
+export default observer(SupabaseAuth)

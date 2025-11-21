@@ -1,16 +1,87 @@
-1. 在supabase网站创建了实例，并将密钥写到了.env文件中
+# Day 2: Supabase 基础配置和认证系统 - 学习笔记
 
-2. 创建了todos表，并开启了supabase的行级权限。行级权限控制支持根据policy控制表中每一行数据的访问权限
+## 1. Supabase 项目创建与配置
 
-3. 创建了todos表行级权限的policy，增删改查都只能是登录验证账号的 uid 和 表格中 user_id 字段值一致才行
+### 项目创建
+- 在 Supabase Dashboard 创建了新项目实例
+- 记录了项目 URL 和 anon key
+- 将密钥配置到 `.env` 文件中，使用环境变量管理敏感信息
 
-4. policy的using实现类似在需要执行的sql语句中追加上了where条件。check实现类似在插入后验证了插入的结果是否和验证的条件一致
+### 环境变量配置
+- 使用 `VITE_SUPABASE_URL` 存储项目 URL
+- 使用 `VITE_SUPABASE_ANON_KEY` 存储匿名访问密钥
+- 通过 `env-validator.ts` 验证环境变量的正确性
 
-5. 新增了 src/components/SupabaseAuth.tsx 文件。该文件中是SupabaseAuth组件，如果未登录则展示登录注册界面；如果已登录则展示登录用户信息。其中主要用到 supabase.auth.getSession() 方法来获取当前登录的用户session，session中包含的用户id，用户名等信息；用supabase.auth.onAuthStateChange来监听用户登录和登出的状态，当登入或者登出时触发回调函数，并在回调函数中设置最新的用户信息；用 upabase.auth.signInWithPassword 来完成用户的登录操作；使用 supabase.auth.signUp 来完成用户的注册操作
+## 2. 数据库表设计与 RLS 配置
 
-supabase可以配置支持的登录方式，使用邮件方式时，注册后邮箱会收到激活邮件，点击后才能激活使用。
-当登录后supabase会生成jwt token保存到客户端的localstorage中，后续的请求会自动在Authorization头中带上这个token给服务端验证
+### todos 表结构
+```sql
+CREATE TABLE todos (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users NOT NULL,
+  title TEXT NOT NULL,
+  completed BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
-supabase.auth.onAuthStateChange是监听的浏览器localstorage的状态变化，当用户登录或者登出时就算当前打开了多个页面，所有页面也会都监听到状态的变化从而触发回调
+### 行级权限 (Row Level Security)
+- **作用**: 根据 policy 控制表中每一行数据的访问权限
+- **启用**: `ALTER TABLE todos ENABLE ROW LEVEL SECURITY;`
 
-6. 启动vite验证效果正常
+### RLS 策略实现
+- **策略规则**: 增删改查操作都只能访问登录用户 uid 与表格中 user_id 字段值一致的数据行
+- **策略语句**:
+  ```sql
+  -- 插入权限
+  CREATE POLICY "Users can insert their own todos" ON todos
+    FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = user_id);
+
+  -- 查询权限
+  CREATE POLICY "Users can view their own todos" ON todos
+    FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
+
+  -- 更新权限
+  CREATE POLICY "Users can update their own todos" ON todos
+    FOR UPDATE TO authenticated
+    USING (auth.uid() = user_id);
+
+  -- 删除权限
+  CREATE POLICY "Users can delete their own todos" ON todos
+    FOR DELETE TO authenticated
+    USING (auth.uid() = user_id);
+  ```
+
+### Policy 实现机制
+- **USING**: 类似在执行的 SQL 语句中追加 WHERE 条件
+- **CHECK**: 类似在插入后验证插入结果是否符合验证条件
+
+## 3. 认证系统实现
+
+### SupabaseAuth 组件功能
+- **未登录状态**: 展示登录注册界面
+- **已登录状态**: 展示当前登录用户信息和退出登录按钮
+
+### 核心 API 方法
+- **`supabase.auth.getSession()`**: 获取当前登录用户的 session，包含用户 id、邮箱等信息
+- **`supabase.auth.onAuthStateChange()`**: 监听用户登录和登出状态变化
+- **`supabase.auth.signInWithPassword()`**: 完成用户密码登录操作
+- **`supabase.auth.signUp()`**: 完成用户注册操作
+- **`supabase.auth.signOut()`**: 完成用户登出操作
+
+### 认证状态管理
+- **JWT Token**: 登录后 Supabase 生成 JWT token 保存到客户端 localStorage
+- **自动验证**: 后续请求自动在 Authorization 头中携带 token 给服务端验证
+- **多页面同步**: `onAuthStateChange` 监听 localStorage 状态变化，确保多页面间状态同步
+
+### 邮件认证流程
+- 配置邮件登录方式后，注册时邮箱会收到激活邮件
+- 点击激活链接后才能使用账户
+
+## 4. 功能验证
+- 启动 Vite 开发服务器进行功能测试
+- 验证了用户注册、登录、登出功能正常工作
+- 确认认证状态正确显示和管理
