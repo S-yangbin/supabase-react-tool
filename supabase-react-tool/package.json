@@ -11,6 +11,7 @@
     "deploy": "npm run build"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.1.0",
     "@supabase/supabase-js": "^2.83.0",
     "antd": "^5.29.1",
     "mobx": "^6.15.0",
