@@ -150,17 +150,88 @@ npm run preview
 ```
 
 ### 9. Cloudflare Pages 部署准备 (20分钟)
-- 在 Cloudflare Pages 控制台创建新项目
-- 连接 GitHub/GitLab 仓库
-- 配置构建设置：
-  - 构建命令：`npm run build`
-  - 构建输出目录：`dist`
-  - 环境变量：添加 Supabase 相关变量
+- **创建 Cloudflare 账户**
+  - 访问 [Cloudflare Dashboard](https://dash.cloudflare.com)
+  - 注册新账户或登录现有账户
+  - 验证邮箱地址
+
+- **连接 GitHub/GitLab 仓库**
+  - 在 Cloudflare Dashboard 中选择 "Pages"
+  - 点击 "Create a project" → "Connect to Git"
+  - 选择 GitHub 或 GitLab 账户
+  - 授权 Cloudflare 访问权限
+  - 选择要部署的仓库（supabase-react-tool）
+
+- **配置构建设置**
+  - 选择框架预设：React
+  - 配置构建选项：
+    - **构建命令**: `npm run build`
+    - **构建输出目录**: `dist`
+    - **环境变量**: 配置 Supabase 相关变量
+  - 添加环境变量：
+    - `VITE_SUPABASE_URL`: 您的 Supabase 项目 URL
+    - `VITE_SUPABASE_ANON_KEY`: 您的 Supabase 项目 anon key
+
+- **高级设置（可选）**
+  - 在 "Settings" → "Build configurations" 中可以进一步优化：
+    - **Node.js 版本**: 选择最新 LTS 版本
+    - **环境**: 选择 production
+    - **构建缓存**: 启用以加快构建速度
+
+- **部署配置文件**
+  - 在仓库根目录创建 `wrangler.toml`：
+  ```toml
+  name = "supabase-react-tool"
+  compatibility_date = "2024-01-01"
+  pages_build_output_dir = "dist"
+  
+  [vars]
+  # 环境变量将在 Cloudflare Pages 部署时设置
+  ```
+
+- **安全设置**
+  - 在 "Settings" → "Environment Variables" 中管理敏感信息
+  - 确保不将敏感信息硬编码在配置文件中
+  - 使用 Cloudflare 的环境变量功能来管理 API keys
 
 ### 10. 部署验证 (10分钟)
-- 部署到 Cloudflare Pages
-- 验证功能完整性
-- 测试生产环境性能
+- **首次部署**
+  - 代码推送后，Cloudflare Pages 会自动触发构建
+  - 在 "Deployments" 标签页查看构建日志
+  - 等待构建成功完成（通常需要 2-5 分钟）
+
+- **访问部署的应用**
+  - 构建成功后，会生成默认的部署 URL
+  - URL 格式：`https://<project-name>.pages.dev`
+  - 也可以设置自定义域名
+
+- **功能验证**
+  - 访问部署的 URL
+  - 测试以下功能：
+    - 用户认证（登录/注册/退出）
+    - 待办事项的增删改查
+    - 数据可视化图表
+    - 响应式布局
+  - 检查浏览器控制台是否有错误
+
+- **性能验证**
+  - 使用浏览器开发者工具的 Network 面板检查资源加载
+  - 验证代码分割是否生效
+  - 检查是否有 404 错误
+  - 测试页面加载速度
+
+- **错误处理**
+  - 如果构建失败，查看 Cloudflare 提供的错误日志
+  - 常见问题：
+    - 依赖包版本冲突
+    - 环境变量未正确设置
+    - 构建命令错误
+    - 路径配置问题
+
+- **持续部署**
+  - 每次向 main 分支推送代码时，会自动触发新的部署
+  - 可以在 "Deployments" 中查看所有部署历史
+  - 可以回滚到之前的部署版本
 
 ### 11. 代码提交 (5分钟)
 ```bash
@@ -168,10 +239,63 @@ git add .
 git commit -m "添加部署配置: Cloudflare Pages 和性能优化"
 ```
 
+### 12. 部署最佳实践 (15分钟)
+
+- **环境变量管理**
+  - 使用 `.env.production` 作为模板，实际值在 Cloudflare 控制台设置
+  - 避免在代码中硬编码敏感信息
+  - 定期轮换 API keys
+
+- **构建优化**
+  - 监控构建时间和文件大小
+  - 使用代码分割减少初始加载大小
+  - 启用 gzip 压缩
+  - 优化图片资源
+
+- **错误监控**
+  - 在生产环境中添加错误监控
+  - 使用 Sentry 或类似工具跟踪前端错误
+  - 添加用户友好的错误提示
+
+- **性能监控**
+  - 使用 PageSpeed Insights 优化性能
+  - 监控 Core Web Vitals 指标
+  - 定期检查页面加载速度
+
+- **安全考虑**
+  - 定期更新依赖包
+  - 使用 HTTPS
+  - 配置适当的安全头
+  - 限制对敏感端点的访问
+
+### 13. 常见问题和解决方案 (20分钟)
+
+- **构建失败常见原因**
+  - **依赖包问题**: 确保 `package-lock.json` 与 `package.json` 一致
+  - **环境变量**: 检查环境变量名称和值是否正确
+  - **路径问题**: 确保构建输出路径与 Cloudflare 配置一致
+
+- **部署后问题排查**
+  - **404 错误**: 检查路由配置和静态资源路径
+  - **API 连接失败**: 验证 Supabase URL 和密钥
+  - **样式丢失**: 确认 CSS 文件正确构建
+
+- **性能问题**
+  - **加载慢**: 检查代码分割配置
+  - **首屏渲染**: 优化首屏关键资源
+  - **内存泄漏**: 使用 React DevTools 检查组件卸载
+
+- **调试技巧**
+  - 使用 `console.log` 在生产环境中调试
+  - 查看 Cloudflare Pages 的构建日志
+  - 使用浏览器开发者工具分析性能
+
 ## 学习资源
 - [Cloudflare Pages 部署指南](https://developers.cloudflare.com/pages/framework-guides/deploy-a-react-application/)
 - [Vite 生产构建优化](https://vite.dev/guide/build.html)
 - [React 性能优化](https://react.dev/reference/react/lazy)
+- [Cloudflare Pages 环境变量文档](https://developers.cloudflare.com/pages/configuration/environment-variables/)
+- [Cloudflare Pages 自定义域名](https://developers.cloudflare.com/pages/platform/custom-domains/)
 
 ## 今日目标检查
 - [ ] Cloudflare Pages 配置完成
@@ -179,3 +303,5 @@ git commit -m "添加部署配置: Cloudflare Pages 和性能优化"
 - [ ] 代码分割实现
 - [ ] 性能优化完成
 - [ ] 部署测试成功
+- [ ] 环境变量配置正确
+- [ ] 部署流程验证通过

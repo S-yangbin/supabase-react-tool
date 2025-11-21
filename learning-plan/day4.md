@@ -7,48 +7,50 @@
 
 ## 具体步骤
 
-### 1. 创建数据可视化组件 (45分钟)
-创建 `src/components/DataVisualization.tsx`：
+### 1. 创建统计Store (20分钟)
+创建 `src/stores/statsStore.ts`：
 ```typescript
-import React, { useEffect } from 'react'
-import { Card, Row, Col, Statistic, Progress, Typography, Spin, theme } from 'antd'
-import { CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined, PercentageOutlined } from '@ant-design/icons'
-import { supabase } from '../lib/supabase'
-import { useStore } from '../stores'
 import { makeAutoObservable } from 'mobx'
+import { supabase } from '../lib/supabase'
+import { RootStore } from './index'
 
-const { Title } = Typography
-
-interface TodoStats {
+export interface TodoStats {
   total: number
   completed: number
   pending: number
   completionRate: number
 }
 
-// 创建 StatsStore
-class StatsStore {
+export class StatsStore {
   stats: TodoStats | null = null
   loading: boolean = true
+  rootStore: RootStore
 
-  constructor() {
+  constructor(rootStore: RootStore) {
+    this.rootStore = rootStore
     makeAutoObservable(this)
+  }
+
+  get authStore() {
+    return this.rootStore.authStore
   }
 
   fetchStats = async () => {
     try {
       this.loading = true
-      // 获取所有待办事项统计
+      
+      // 只获取当前用户的待办事项统计
       const { data: allTodos, error: allError } = await supabase
         .from('todos')
         .select('*')
+        .eq('user_id', this.authStore.user?.id)
 
       if (allError) throw allError
 
-      // 获取已完成待办事项
       const { data: completedTodos, error: completedError } = await supabase
         .from('todos')
         .select('*')
+        .eq('user_id', this.authStore.user?.id)
         .eq('completed', true)
 
       if (completedError) throw completedError
@@ -73,16 +75,55 @@ class StatsStore {
     }
   }
 }
+```
 
-// 更新 rootStore
-rootStore.statsStore = new StatsStore()
+### 2. 更新RootStore (5分钟)
+修改 `src/stores/index.ts`，添加statsStore：
+```typescript
+import { createContext, useContext } from 'react'
+import { makeAutoObservable } from 'mobx'
+import { TodoStore } from './todoStore'
+import { AuthStore } from './authStore'
+import { StatsStore } from './statsStore'
+
+class RootStore {
+  todoStore: TodoStore
+  authStore: AuthStore
+  statsStore: StatsStore
+
+  constructor() {
+    this.todoStore = new TodoStore(this)
+    this.authStore = new AuthStore(this)
+    this.statsStore = new StatsStore(this)
+    makeAutoObservable(this)
+  }
+}
+
+export const rootStore = new RootStore()
+
+export const StoreContext = createContext<RootStore>(rootStore)
+
+export const useStore = () => useContext(StoreContext)
+```
+
+### 3. 创建数据可视化组件 (25分钟)
+创建 `src/components/DataVisualization.tsx`：
+```typescript
+import React, { useEffect } from 'react'
+import { Card, Row, Col, Statistic, Progress, Typography, Spin } from 'antd'
+import { CheckCircleOutlined, ClockCircleOutlined, FileTextOutlined, PercentageOutlined } from '@ant-design/icons'
+import { useStore } from '../stores'
+
+const { Title } = Typography
 
 const DataVisualization: React.FC = () => {
   const { statsStore } = useStore()
 
   useEffect(() => {
-    statsStore.fetchStats()
-  }, [])
+    if (statsStore.authStore.user) {
+      statsStore.fetchStats()
+    }
+  }, [statsStore.authStore.user])
 
   if (statsStore.loading || !statsStore.stats) {
     return (
@@ -100,7 +141,7 @@ const DataVisualization: React.FC = () => {
     <Card style={{ marginBottom: 24 }}>
       <Title level={3}>待办事项统计</Title>
       
-      <Row gutter={[16, 16]}>
+      <Row gutter={[6, 6]}>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic

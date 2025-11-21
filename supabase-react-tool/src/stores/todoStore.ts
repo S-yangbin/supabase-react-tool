@@ -24,6 +24,20 @@ export class TodoStore {
     return this.rootStore.authStore
   }
 
+  get stats() {
+    const total = this.todos.length
+    const completed = this.todos.filter(t => t.completed).length || 0
+    const pending = total - completed
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
+
+    return {
+      total,
+      completed,
+      pending,
+      completionRate
+    }
+  }
+
   setTodos = (todos: Todo[]) => {
     this.todos = todos
     this.setError(null)

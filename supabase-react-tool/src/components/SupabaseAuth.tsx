@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { observer } from 'mobx-react-lite'
 import { Form, Input, Button, Card, Alert, Typography, Space } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'

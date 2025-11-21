@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react'
 import { observer } from 'mobx-react-lite'
 import { Layout, Typography, Input, Button, List, Checkbox, Card, Row, Col, Alert } from 'antd'
-import { PlusOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import SupabaseAuth from '../components/SupabaseAuth'
+import DataVisualization from '../components/DataVisualization'
 import { useStore } from '../stores'
 import { type Todo } from '../stores/todoStore'
 
@@ -11,12 +12,12 @@ const { Title, Text } = Typography
 const { Search } = Input
 
 const Dashboard: React.FC = () => {
-  const { todoStore } = useStore()
+  const { todoStore, authStore } = useStore()
   const [newTodo, setNewTodo] = React.useState('')
 
   useEffect(() => {
     todoStore.fetchTodos()
-  }, [])
+  }, [authStore.user])
 
   const handleAddTodo = () => {
     if (!newTodo.trim()) return
@@ -44,6 +45,9 @@ const Dashboard: React.FC = () => {
             <Card>
               <SupabaseAuth />
             </Card>
+            <div style={{ marginTop: 16 }}>
+              <DataVisualization />
+            </div>
           </Col>
           
           <Col xs={24} md={16}>
@@ -92,7 +96,6 @@ const Dashboard: React.FC = () => {
                         <Checkbox
                           checked={todo.completed}
                           onChange={() => todoStore.toggleTodo(todo.id, todo.completed)}
-                          icon={<CheckOutlined />}
                         />
                       }
                       title={
